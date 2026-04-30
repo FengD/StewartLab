@@ -3,6 +3,24 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+[build-system]
+requires = ["setuptools<82.0.0", "wheel", "toml"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stewart_test"
+version = "0.1.0"
+description = "Isaac Lab Stewart platform reinforcement learning extension."
+requires-python = ">=3.10"
+dependencies = ["psutil"]
+
+[tool.setuptools]
+package-dir = {"" = "source/stewart_test"}
+
+[tool.setuptools.packages.find]
+where = ["source/stewart_test"]
+include = ["stewart_test*"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

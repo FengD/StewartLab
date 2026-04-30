@@ -1,135 +1,133 @@
-# Template for Isaac Lab Projects
+# Stewart Platform Isaac Lab Tasks
 
-## Overview
+This repository contains Isaac Lab direct-RL environments for training a Stewart platform to stabilize falling objects.
+The active training backend is RSL-RL PPO.
 
-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
+## Environments
 
-**Key Features:**
+| Task | Description |
+| --- | --- |
+| `Template-Stewart-Test-Direct-v0` | Stewart platform stabilizes a falling ellipsoid on the top disk center. |
+| `Template-Stewart-Wave-System-Direct-v0` | Stewart platform is mounted on a continuously moving 6-DOF rectangular base and stabilizes a falling sphere. |
 
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
+## Assets
 
-**Keywords:** extension, template, isaaclab
+The Stewart platform asset is stored under `assets/` and uses project-relative USD references:
+
+```text
+assets/Stewart_full.usd
+assets/Stewart/Stewart/Stewart.usd
+assets/Stewart/Stewart/configuration/
+```
+
+The default asset path is resolved from the project root. You can override it at runtime:
+
+```bash
+STEWART_USD_PATH=/absolute/path/to/Stewart_full.usd python scripts/rsl_rl/train.py --task <TASK_NAME>
+```
+
+## Stewart Platform Model
+
+The Stewart platform is a closed-chain 6-DOF parallel mechanism. It is controlled through six prismatic slider joints:
+
+```text
+Slider_13, Slider_18, Slider_17, Slider_14, Slider_16, Slider_15
+```
+
+The top disk reference body is `UJ61`. The observation uses the object center position relative to the top disk center. If the USD top disk origin changes, adjust `platform_center_offset` in `stewart_test_env_cfg.py`.
+
+Implementation choices for stability:
+
+- Direct slider effort control is used instead of PhysX drive targets.
+- Full articulation joint-state reset is disabled by default to avoid breaking closed-chain constraints.
+- Articulation self-collision is disabled.
+- The six sliders start with a `0.10 m` extension to provide buffer travel.
+
+## Observation And Action
+
+The policy observation has 27 values:
+
+```text
+6  slider joint positions
+6  slider joint velocities
+3  top platform projected gravity
+3  top platform angular velocity
+3  object center position relative to top disk center
+6  previous smoothed actions
+```
+
+The action has 6 values, one per slider. Actions are clipped to `[-1, 1]`, smoothed, and mapped to force:
+
+```text
+slider_force = action * action_scale
+```
 
 ## Installation
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
-  We recommend using the conda or uv installation as it simplifies calling Python scripts from the terminal.
-
-- Clone or copy this project/repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
-
-- Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
-
-    ```bash
-    # use 'PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-    python -m pip install -e source/stewart_test
-
-- Verify that the extension is correctly installed by:
-
-    - Listing the available tasks:
-
-        Note: It the task name changes, it may be necessary to update the search pattern `"Template-"`
-        (in the `scripts/list_envs.py` file) so that it can be listed.
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/list_envs.py
-        ```
-
-    - Running a task:
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
-        ```
-
-    - Running a task with dummy agents:
-
-        These include dummy agents that output zero or random agents. They are useful to ensure that the environments are configured correctly.
-
-        - Zero-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/zero_agent.py --task=<TASK_NAME>
-            ```
-        - Random-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/random_agent.py --task=<TASK_NAME>
-            ```
-
-### Set up IDE (Optional)
-
-To setup the IDE, please follow these instructions:
-
-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu.
-  When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
-
-If everything executes correctly, it should create a file .python.env in the `.vscode` directory.
-The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse.
-This helps in indexing all the python modules for intelligent suggestions while writing code.
-
-### Setup as Omniverse Extension (Optional)
-
-We provide an example UI extension that will load upon enabling your extension defined in `source/stewart_test/stewart_test/ui_extension_example.py`.
-
-To enable your extension, follow these steps:
-
-1. **Add the search path of this project/repository** to the extension manager:
-    - Navigate to the extension manager using `Window` -> `Extensions`.
-    - Click on the **Hamburger Icon**, then go to `Settings`.
-    - In the `Extension Search Paths`, enter the absolute path to the `source` directory of this project/repository.
-    - If not already present, in the `Extension Search Paths`, enter the path that leads to Isaac Lab's extension directory directory (`IsaacLab/source`)
-    - Click on the **Hamburger Icon**, then click `Refresh`.
-
-2. **Search and enable your extension**:
-    - Find your extension under the `Third Party` category.
-    - Toggle it to enable your extension.
-
-## Code formatting
-
-We have a pre-commit template to automatically format your code.
-To install pre-commit:
+Use the Python environment that can run Isaac Lab:
 
 ```bash
-pip install pre-commit
+cd /home/ding/Documents/stewart_test/stewart_test
+python -m pip install -e .
 ```
 
-Then you can run pre-commit with:
+## Training
+
+Train the ellipsoid task:
 
 ```bash
-pre-commit run --all-files
+PYTHONPATH=$PWD/source/stewart_test:$PYTHONPATH \
+python scripts/rsl_rl/train.py \
+  --task Template-Stewart-Test-Direct-v0 \
+  --num_envs 1024 \
+  --headless
 ```
 
-## Troubleshooting
+Train the wave-base sphere task:
 
-### Pylance Missing Indexing of Extensions
-
-In some VsCode versions, the indexing of part of the extensions is missing.
-In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
-
-```json
-{
-    "python.analysis.extraPaths": [
-        "<path-to-ext-repo>/source/stewart_test"
-    ]
-}
+```bash
+PYTHONPATH=$PWD/source/stewart_test:$PYTHONPATH \
+python scripts/rsl_rl/train.py \
+  --task Template-Stewart-Wave-System-Direct-v0 \
+  --num_envs 1024 \
+  --headless
 ```
 
-### Pylance Crash
+For visual debugging:
 
-If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory.
-A possible solution is to exclude some of omniverse packages that are not used in your project.
-To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"`
-Some examples of packages that can likely be excluded are:
-
-```json
-"<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages
-"<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools
-"<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools
-"<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools
-...
+```bash
+PYTHONPATH=$PWD/source/stewart_test:$PYTHONPATH \
+python scripts/rsl_rl/train.py \
+  --task Template-Stewart-Wave-System-Direct-v0 \
+  --num_envs 16
 ```
+
+## Utilities
+
+Inspect the USD model:
+
+```bash
+python scripts/load_usd_model.py --usd_path assets/Stewart_full.usd
+```
+
+List registered tasks:
+
+```bash
+python scripts/list_envs.py --keyword Stewart
+```
+
+Run random actions:
+
+```bash
+python scripts/random_agent.py --task Template-Stewart-Test-Direct-v0 --num_envs 16
+```
+
+## Notes
+
+Warnings about `UsdPreviewSurface.mdl` or mesh collision fallback can appear with the imported CAD/USD asset. They do not necessarily stop training. A hard failure such as `Failed to find an articulation` usually means a USD reference path is broken.
+
+## Documentation
+
+- `docs/STEWART_RL_TASKS.md`: Stewart RL tasks, observations, actions, rewards, and training commands.
+- `docs/USD_ASSET_CHECK.md`: USD reference inspection and repair workflow.
+- `docs/TUNING_NOTES.md`: Tuning history and practical debugging notes.

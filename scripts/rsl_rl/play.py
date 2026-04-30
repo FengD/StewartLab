@@ -193,29 +193,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         export_policy_as_jit(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.pt")
         export_policy_as_onnx(policy_nn, normalizer=normalizer, path=export_model_dir, filename="policy.onnx")
 
-    # ================= 键盘控制初始化 开始 =================
-    import carb
-    import carb.input
-    import omni.appwindow
-
-    appwindow = omni.appwindow.get_default_app_window()
-    keyboard = appwindow.get_keyboard()
-    input_interface = carb.input.acquire_input_interface()
-
-    def get_keyboard_cmds():
-        vx, vy, wz = 0.0, 0.0, 0.0
-        # W/S 控制前后 (X轴线速度)
-        if input_interface.get_keyboard_value(keyboard, carb.input.KeyboardInput.W): vx = 1.0
-        if input_interface.get_keyboard_value(keyboard, carb.input.KeyboardInput.S): vx = -1.0
-        # A/D 控制左右平移 (Y轴线速度)
-        if input_interface.get_keyboard_value(keyboard, carb.input.KeyboardInput.A): vy = 1.0
-        if input_interface.get_keyboard_value(keyboard, carb.input.KeyboardInput.D): vy = -1.0
-        # Q/E 控制左右转向 (Z轴角速度)
-        if input_interface.get_keyboard_value(keyboard, carb.input.KeyboardInput.Q): wz = 1.0
-        if input_interface.get_keyboard_value(keyboard, carb.input.KeyboardInput.E): wz = -1.0
-        return vx, vy, wz
-    # ================= 键盘控制初始化 结束 =================
-
 
     dt = env.unwrapped.step_dt
 
@@ -227,21 +204,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         start_time = time.time()
         # run everything in inference mode
         with torch.inference_mode():
-
-            # ================= 注入键盘指令 开始 =================
-            vx, vy, wz = get_keyboard_cmds()
-            command_manager = env.unwrapped.command_manager
-            
-            # 查找名为 "base_velocity" 的指令生成器并覆盖其数值
-            if "base_velocity" in command_manager.active_terms:
-                cmd_term = command_manager.get_term("base_velocity")
-                # 修改底层的指令张量 (乘以的系数为最大速度，可自行调整)
-                cmd_term.command[:, 0] = vx * 1.0  # 最大前进速度 1.0 m/s
-                cmd_term.command[:, 1] = vy * 1.0  # 最大横移速度 0.5 m/s
-                cmd_term.command[:, 2] = wz * 2.0  # 最大转向速度 1.0 rad/s
-                
-            # ================= 注入键盘指令 结束 =================
-
 
             # agent stepping
             actions = policy(obs)

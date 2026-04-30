@@ -8,7 +8,13 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import os
 import sys
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+PROJECT_SOURCE_PATH = os.path.join(PROJECT_ROOT, "source", "stewart_test")
+if PROJECT_SOURCE_PATH not in sys.path:
+    sys.path.insert(0, PROJECT_SOURCE_PATH)
 
 from isaaclab.app import AppLauncher
 
@@ -76,7 +82,6 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
 """Rest everything follows."""
 
 import logging
-import os
 import time
 from datetime import datetime
 
