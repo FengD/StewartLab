@@ -131,3 +131,7 @@ Warnings about `UsdPreviewSurface.mdl` or mesh collision fallback can appear wit
 - `docs/STEWART_RL_TASKS.md`: Stewart RL tasks, observations, actions, rewards, and training commands.
 - `docs/USD_ASSET_CHECK.md`: USD reference inspection and repair workflow.
 - `docs/TUNING_NOTES.md`: Tuning history and practical debugging notes.
+
+## Thanks
+
+* Thanks for the model: https://github.com/mlayek21/Stewart-Platform
