@@ -21,7 +21,7 @@ class StewartWaveSystemEnvCfg(StewartTestEnvCfg):
         spawn=sim_utils.SphereCfg(
             radius=0.05,
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.95, 0.72, 0.18)),
-            # Use realistic restitution (e.g. wooden ball ~0.3-0.4).
+            # Keep realistic rebound characteristics and solve robustness via policy shaping.
             physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=0.9, dynamic_friction=0.8, restitution=0.35),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=False,
@@ -96,6 +96,14 @@ class StewartWaveSystemEnvCfg(StewartTestEnvCfg):
 
     # For higher drops, we need more time and a more "prepared" posture.
     object_target_rel_height = 0.10
+    # Encourage earlier feed-forward interception while the ball is still high.
+    rew_scale_intercept = 3.2
+    intercept_z_gate = 0.18
+    intercept_time_max = 2.0
+    intercept_xy_sigma = 0.18
+    # Allow stronger command changes in high-altitude catch phase (buffer preparation).
+    max_action_delta_high = 0.24
+    adaptive_action_delta_switch_height = 0.18
 
     # Residual tilt budget: overly tight limits terminate healthy rollouts (~100 steps vs ~960 step horizon).
     max_platform_tilt = 0.78
@@ -109,15 +117,16 @@ class StewartWaveSystemEnvCfg(StewartTestEnvCfg):
     rew_scale_platform_ang_vel = -0.22
     rew_scale_platform_lin_residual = -0.22
     rew_scale_disk_pose_reg = -0.42
-    rew_scale_center = 20.0
-    rew_scale_center_velocity = 5.0
+    rew_scale_center = 22.0
+    rew_scale_center_velocity = 5.5
 
     # After catch: reward keeping the ball centered on disk; penalize world-XY drift of top plate vs reset snapshot
     # (encourages compensating wave motion with sliders instead of letting the whole stack "surf" the disturbance).
-    rew_scale_on_disk = 12.0
+    rew_scale_on_disk = 15.0
     on_disk_height_band = 0.14
-    on_disk_xy_sigma = 0.10
-    rew_scale_world_center_hold = -0.55
+    # Tighter XY sigma increases preference for true center hold instead of "safe but off-center".
+    on_disk_xy_sigma = 0.08
+    rew_scale_world_center_hold = -0.70
     world_center_hold_sigma = 0.058
     # Stronger action-rate penalty only in the on-disk phase to kill high-frequency command chatter.
-    rew_scale_action_rate_on_disk = -0.028
+    rew_scale_action_rate_on_disk = -0.035

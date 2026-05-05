@@ -246,3 +246,78 @@ PYTHONPATH=$PWD/source/stewart_test:$PYTHONPATH \
 - 完成 `Learning iteration 0/1`。
 - 没有 `Failed to find an articulation`。
 - 没有 PhysX `setDriveTarget()` illegal 报错。
+
+## 12. 最近更新（2026-05）
+
+### 12.1 Wave 残差参考修正（command/sim skew）
+
+在 wave 任务中，残差倾角/平整度计算从“命令缓存四元数”切换为“仿真当前 root 四元数”：
+
+```text
+robot.data.root_quat_w
+```
+
+原因：命令值和仿真值存在微小时延时，残差奖励和终止判据会有偏差。
+
+### 12.2 Play 模式默认使用最终难度
+
+`scripts/rsl_rl/play.py` 增加行为：
+
+- 默认关闭 curriculum（如果任务有该配置），直接按最终难度播放。
+- 可通过 `--use_curriculum_in_play` 恢复课程模式。
+
+这样能避免“play 看起来波浪平台不动”的假象。
+
+### 12.3 Wave Curriculum 可见性与节奏修正
+
+为了避免 wave 课程长时间接近 0 扰动，更新了 wave 专用课程参数：
+
+- `curriculum_duration_steps = 20000`
+- `curriculum_env_progress_spread = 0.25`
+- 轴启动提前：`(0.00, 0.08, 0.16, 0.30, 0.45, 0.60)`
+
+同时修正振幅计算逻辑：
+
+```text
+max_amp = start_amp + (end_amp - start_amp) * (progress * axis_scale)
+```
+
+并增加日志：
+
+- `Curriculum/global_progress`
+- `Wave/mean_env_progress`
+- `Wave/mean_amp_xyz`, `Wave/mean_amp_rpy`
+- `Wave/axis_scale_x`, `Wave/axis_scale_yaw`
+
+### 12.4 “物理真实性优先”策略
+
+围绕“高弹起偶发掉落”问题，最终采用的原则是：
+
+- 不通过降低材质弹性“取巧”。
+- 优先增强策略的提前接球与缓冲能力（intercept shaping + 高空阶段带宽）。
+
+当前方向：
+
+- 保持球体 `restitution = 0.35`
+- 上调/前移 intercept 相关参数，提升高空预判接球奖励
+- 允许球体高空阶段更大动作带宽，提前建立缓冲姿态
+
+### 12.5 新增 IMU-only Wave 任务
+
+新增任务：
+
+```text
+Template-Stewart-Wave-System-IMU-Direct-v0
+```
+
+设计目的：部署时可能无法直接获取 wave 命令 pose/velocity，更常见是 IMU 可得。
+
+观测替换：
+
+- 去掉 commanded wave pose/velocity
+- 增加 IMU 观测：
+  - root projected gravity
+  - root-frame gyro
+  - root-frame linear acceleration
+
+观测维度：`40`（base 31 + imu 9）。

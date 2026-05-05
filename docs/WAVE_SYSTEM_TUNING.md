@@ -62,6 +62,27 @@ The extra wave pose/velocity terms are important because translation disturbance
 projected gravity alone. They give the policy feed-forward information similar to how legged locomotion policies use
 terrain or command observations.
 
+### 2.3 IMU-only wave task (`Template-Stewart-Wave-System-IMU-Direct-v0`)
+
+For deployment realism, an IMU-only variant is provided:
+
+```text
+31  base observation (same as fixed-base)
+3   root projected gravity (IMU gravity direction)
+3   root angular velocity in root frame (gyro)
+3   root linear acceleration in root frame (accelerometer)
+```
+
+Total IMU-wave observation size: **40**.
+
+Implementation:
+
+- task registration: `stewart_wave_system_imu/__init__.py`
+- env logic: `stewart_wave_system_imu_env.py`
+- cfg: `stewart_wave_system_imu_env_cfg.py`
+
+This task removes direct commanded wave pose/velocity from observations and replaces them with simulated IMU signals.
+
 ## 3. Rewards: avoid penalizing base-mandated motion
 
 ### 3.1 Residual stabilization vs wave base
@@ -72,6 +93,9 @@ For wave task, “platform stability” rewards should not punish mandated base 
 - residual flatness: gravity projection in disk frame **relative to root frame**
 
 Implementation: `stewart_wave_system_env.py::_get_rewards` (calls shared `compute_rewards` with residual quantities).
+
+Recent update: residual orientation now uses **simulated root quaternion**
+(`robot.data.root_quat_w`) instead of commanded cached quaternion to avoid command/sim skew.
 
 ### 3.2 Energy / jitter penalties are gated by phase
 
@@ -205,20 +229,47 @@ wave_axis_ramp_progress
 Current wave order:
 
 ```text
-0.00-0.15: fixed-base-like catching
-0.15+: x translation
-0.25+: y translation
-0.35+: z translation
-0.55+: roll
-0.70+: pitch
-0.85+: yaw
+0.00+: x translation
+0.08+: y translation
+0.16+: z translation
+0.30+: roll
+0.45+: pitch
+0.60+: yaw
 ```
+
+Recent wave curriculum tuning updates:
+
+- wave task uses faster curriculum pacing (`curriculum_duration_steps=20000`, narrower spread) than fixed-base.
+- non-zero start amplitudes are kept active in early training.
+- amplitude computation uses:
+
+```text
+start_amp + (end_amp - start_amp) * (progress * axis_scale)
+```
+
+instead of globally multiplying by `axis_scale`, so early-stage disturbance is not accidentally zeroed out.
+- additional training logs are exported:
+  - `Curriculum/global_progress`
+  - `Wave/mean_env_progress`
+  - `Wave/mean_amp_xyz`, `Wave/mean_amp_rpy`
+  - `Wave/axis_scale_x`, `Wave/axis_scale_yaw`
+
+These metrics are intended to diagnose “curriculum looks stuck / no visible wave” issues quickly.
+
+## 8. Play-mode behavior
+
+`scripts/rsl_rl/play.py` defaults to **final-task difficulty** for evaluation:
+
+- if env cfg has `enable_curriculum`, play disables it by default.
+- use `--use_curriculum_in_play` to keep curriculum behavior during play.
+
+This avoids confusion where play appears to have no wave motion because progress starts near zero.
 
 For object-shape curriculum, the safe path is to train separate task assets or add explicit multi-object management
 (spawn sphere, ellipsoid, and mesh objects up front, then reset only the active object for each env). The current
 single-object environment ramps drop/spin difficulty but does not mutate collision mesh geometry at runtime.
 
-## 8. Smoke test command
+## 9. Smoke test command
 
 Suggested learning progression:
 
@@ -230,8 +281,7 @@ Suggested learning progression:
 5. larger wave + ellipsoid
 ```
 
-The current code implements step 3 by reducing `wave_pos_amplitude`, `wave_rot_amplitude`, and
-`wave_frequency_range` in `stewart_wave_system_env_cfg.py`.
+The current code implements step 3 by using milder start amplitudes and curriculum ramping.
 
 ```bash
 PYTHONPATH=$PWD/source/stewart_test:$PYTHONPATH \
@@ -247,4 +297,6 @@ Success criteria:
 - environment initializes
 - actor/critic shapes match observation dims (wave task: `in_features=46`)
 - no early runtime errors in reward/done computation
+
+For IMU task, actor input should be `in_features=40`.
 

@@ -9,6 +9,7 @@ The active training backend is RSL-RL PPO.
 | --- | --- |
 | `Template-Stewart-Test-Direct-v0` | Stewart platform stabilizes a falling ellipsoid on the top disk center. |
 | `Template-Stewart-Wave-System-Direct-v0` | Stewart platform is mounted on a continuously moving 6-DOF rectangular base and stabilizes a falling sphere. |
+| `Template-Stewart-Wave-System-IMU-Direct-v0` | Same wave setup as above, but observation removes commanded wave pose/velocity and uses IMU-like root measurements. |
 
 ## Demonstrations
 
@@ -107,6 +108,16 @@ python scripts/rsl_rl/train.py \
   --headless
 ```
 
+Train the IMU-only wave task:
+
+```bash
+PYTHONPATH=$PWD/source/stewart_test:$PYTHONPATH \
+python scripts/rsl_rl/train.py \
+  --task Template-Stewart-Wave-System-IMU-Direct-v0 \
+  --num_envs 1024 \
+  --headless
+```
+
 For visual debugging:
 
 ```bash
@@ -115,6 +126,9 @@ python scripts/rsl_rl/train.py \
   --task Template-Stewart-Wave-System-Direct-v0 \
   --num_envs 16
 ```
+
+When running `play`, curriculum is disabled by default so the task is evaluated at final difficulty.
+Use `--use_curriculum_in_play` if you intentionally want curriculum behavior during play.
 
 ## Utilities
 
