@@ -10,6 +10,20 @@ The active training backend is RSL-RL PPO.
 | `Template-Stewart-Test-Direct-v0` | Stewart platform stabilizes a falling ellipsoid on the top disk center. |
 | `Template-Stewart-Wave-System-Direct-v0` | Stewart platform is mounted on a continuously moving 6-DOF rectangular base and stabilizes a falling sphere. |
 
+## Demonstrations
+
+### Ellipsoid Stabilization
+
+<video src="docs/media/stewart_ellipsoid_play.mp4" controls>
+  Ellipsoid stabilization play video.
+</video>
+
+### Wave System Stabilization
+
+<video src="docs/media/stewart_wave_system_play.mp4" controls>
+  Wave system stabilization play video.
+</video>
+
 ## Assets
 
 The Stewart platform asset is stored under `assets/` and uses project-relative USD references:

@@ -2,20 +2,20 @@
 
 本文档整理本项目从 Isaac Lab 模板环境到 Stewart 平台强化学习环境的主要调参过程。目标是记录每个改动背后的原因，便于后续继续调试、复现实验和提交代码。
 
-## 1. 从 Cartpole 模板切换到 Stewart 平台
+## 1. 从 Isaac Lab Direct RL 模板迁移到 Stewart 平台
 
-初始工程来自 Isaac Lab direct RL 模板，默认任务是 cartpole。第一步是将环境替换为 Stewart 平台：
+初始工程来自 Isaac Lab direct RL 模板。第一步是将环境替换为 Stewart 平台：
 
-- `robot_cfg` 从 `CARTPOLE_CFG` 改为 `ArticulationCfg + UsdFileCfg`。
+- `robot_cfg` 改为 `ArticulationCfg + UsdFileCfg`（加载 Stewart USD）。
 - USD 路径改为项目资产 `assets/Stewart_full.usd`。
-- 动作空间从 1 维改为 6 维，对应 6 个 slider。
+- 动作空间改为 6 维，对应 6 个 slider。
 - 使用的 slider 名称：
 
 ```text
 Slider_13, Slider_18, Slider_17, Slider_14, Slider_16, Slider_15
 ```
 
-Stewart 是闭链机构，和 cartpole 这种树状结构不一样，所以后续很多稳定性设置都围绕“不要破坏闭链约束状态”展开。
+Stewart 是闭链机构，和模板中常见的树状结构不一样，所以后续很多稳定性设置都围绕“不要破坏闭链约束状态”展开。
 
 ## 2. 解决闭链机构发散和穿模
 
@@ -76,9 +76,7 @@ SLIDER_INITIAL_EXTENSION = 0.10
 
 ## 5. 观测空间调整
 
-最初 observation 包含椭球/小球线速度和角速度。后来考虑到真实系统中这些速度不一定能直接获得，因此从 policy observation 中移除。
-
-当前 policy observation 为 27 维：
+当前 fixed-base policy observation 为 31 维：
 
 ```text
 6  slider joint positions
@@ -86,7 +84,9 @@ SLIDER_INITIAL_EXTENSION = 0.10
 3  top platform projected gravity
 3  top platform angular velocity
 3  object center position relative to top disk center
+3  object linear velocity (world)
 6  previous smoothed actions
+1  curriculum progress
 ```
 
 其中 object relative position 定义为：
@@ -95,9 +95,19 @@ SLIDER_INITIAL_EXTENSION = 0.10
 object_rel_pos = object_center_world - platform_center_world
 ```
 
-`platform_center_world` 由 `UJ61` body 加 `platform_center_offset` 得到。当前 offset 为 `(0, 0, 0)`。
+`platform_center_world` 由 `UJ61` body 加 `platform_center_offset` 得到。
 
 注意：object velocity 仍可用于 reward shaping，因为 reward 是训练期信号，不必完全等同于部署期可观测量。
+
+wave-base policy observation 为 46 维，在 fixed-base 31 维基础上增加：
+
+```text
+3  root projected gravity
+6  commanded wave pose: x, y, z, roll, pitch, yaw
+6  commanded wave velocity: vx, vy, vz, roll_rate, pitch_rate, yaw_rate
+```
+
+这样策略能看到平移扰动的命令状态，而不是只能从平台姿态被动推断。
 
 ## 6. 奖励调参
 
@@ -144,13 +154,23 @@ x, y, z
 roll, pitch, yaw
 ```
 
-初始版本扰动太小，后续增大到：
+初始版本扰动太小，后续曾增大到：
 
 ```text
 wave_pos_amplitude = (0.08, 0.08, 0.04)
 wave_rot_amplitude = (0.12, 0.12, 0.18)
 wave_frequency_range = (0.35, 0.90)
 ```
+
+近期为了先确认 wave-base 策略能重新学会“接正圆小球并稳定”，已将初始训练扰动降为：
+
+```text
+wave_pos_amplitude = (0.04, 0.04, 0.02)
+wave_rot_amplitude = (0.06, 0.06, 0.09)
+wave_frequency_range = (0.25, 0.65)
+```
+
+后续建议按 curriculum 逐步恢复难度：先固定底座/正圆小球稳定接住，再开启小幅 wave，再逐步增加椭球与更大 wave 幅度。
 
 为了避免地面以下穿模，增加：
 
@@ -159,6 +179,32 @@ system_z_offset = 0.14
 ```
 
 ## 9. 当前建议的调参方向
+
+## 9. Curriculum 调参
+
+新增课程学习后，固定底座和 wave 任务都通过 `curriculum_duration_steps` 在一次训练内从简单到困难：
+
+```text
+global_progress = common_step_counter / curriculum_duration_steps
+env_progress = per-env difficulty sampled from a trailing progress window
+object_spawn_radius_start -> object_spawn_radius
+object_drop_height_range_start -> object_drop_height_range
+object_initial_down_velocity_start -> object_initial_down_velocity
+object_spin_velocity_start -> object_spin_velocity_end
+```
+
+`curriculum_per_env=True` 时，1024 个并行 env 不会同时跳到同一难度；每个 reset 会根据 env index 使用不同 `env_progress`，形成一段难度窗口。随着训练推进，窗口整体向最终难度移动并逐渐收窄。
+
+wave 任务额外按轴逐步开启扰动：
+
+```text
+wave_axis_start_progress = (0.15, 0.25, 0.35, 0.55, 0.70, 0.85)
+对应 x, y, z, roll, pitch, yaw
+```
+
+当前实现避免在运行中修改碰撞 mesh。真实“圆球 -> 椭球 -> 任意物体”的几何切换需要拆成多个任务资产，或后续增加多物体管理并只激活当前课程物体；否则容易触发 PhysX native 层崩溃。
+
+## 10. 当前建议的调参方向
 
 如果 Stewart 动作不明显：
 
@@ -181,7 +227,7 @@ system_z_offset = 0.14
 3. 缩小 center reward 的误差尺度。
 4. 检查 `platform_center_offset` 是否准确。
 
-## 10. Smoke Test
+## 11. Smoke Test
 
 每次大改后建议运行：
 

@@ -61,7 +61,9 @@ processed_action = action_smoothing * action + (1 - action_smoothing) * previous
 
 ## Observation
 
-The policy observation has 27 values:
+The policy observation is a vector (no images).
+
+Fixed-base task (`Template-Stewart-Test-Direct-v0`) observation has **31** values:
 
 ```text
 6  slider joint positions
@@ -69,10 +71,20 @@ The policy observation has 27 values:
 3  top platform projected gravity
 3  top platform angular velocity
 3  object center position relative to top disk center
+3  object linear velocity (world)
 6  previous smoothed actions
+1  curriculum progress
 ```
 
-The object velocity is intentionally not included in the policy observation. The relative position can be obtained by vision in a real system, while linear and angular velocity are not assumed to be directly measurable.
+Wave-base task (`Template-Stewart-Wave-System-Direct-v0`) augments the above with base-motion cues for feed-forward compensation:
+
+```text
+3  wave/root projected gravity
+6  commanded wave pose: x, y, z, roll, pitch, yaw
+6  commanded wave velocity: vx, vy, vz, roll_rate, pitch_rate, yaw_rate
+```
+
+Total wave observation size: **46**.
 
 The relative position is:
 
@@ -93,7 +105,16 @@ The reward encourages:
 - moderate platform tilt,
 - smooth slider motion and moderate action magnitude.
 
-Simulation-only values such as object velocity are used for reward shaping, but they are not part of the policy observation.
+Object linear velocity is part of the policy observation for predictive catching. Other simulation-only quantities may
+still be used for reward shaping.
+
+### Wave task specific notes
+
+- Rewards related to platform stability (flatness / angular velocity) are computed as **residuals w.r.t. the commanded wave root motion**.
+- Termination checks are also wave-aware to avoid false failures while the ball is still high.
+- A predictive interception shaping term is used to encourage proactive catching (see `docs/WAVE_SYSTEM_TUNING.md`).
+- Curriculum starts from easier drops / smaller disturbances and ramps toward the configured final task.
+- Parallel envs use a per-env difficulty window, so a 1024-env run contains multiple adjacent curriculum levels at once.
 
 ## Wave System Task
 
@@ -110,6 +131,8 @@ The system is lifted by `system_z_offset` to keep the base above the ground plan
 wave_pos_amplitude
 wave_rot_amplitude
 wave_frequency_range
+wave_axis_start_progress
+wave_axis_ramp_progress
 ```
 
 ## Training Commands
