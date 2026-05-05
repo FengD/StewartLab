@@ -70,7 +70,8 @@ class StewartWaveSystemEnv(StewartTestEnv):
         object_far = (xy_err > self.cfg.max_object_xy_dist) & xy_gate
 
         # Do not penalize mandated root tilt — only Stewart-on-top surplus tilt vs commanded wave pose.
-        q_rel = quat_mul(quat_conjugate(self._wave_root_quat_w), self.platform_quat)
+        # Use simulated root orientation as reference to avoid command/sim skew.
+        q_rel = quat_mul(quat_conjugate(self.robot.data.root_quat_w), self.platform_quat)
         g_res = quat_rotate_inverse(q_rel, self._gravity_vec_w)
         platform_tilted = torch.linalg.norm(g_res[:, :2], dim=1) > self.cfg.max_platform_tilt
 
@@ -92,6 +93,17 @@ class StewartWaveSystemEnv(StewartTestEnv):
         self._reset_ball_above_platform(env_ids)
         self._compute_intermediate_values()
         self._capture_nominal_disk_offset(env_ids)
+        # Expose wave-curriculum state in training logs for easier diagnosis.
+        if "log" in self.extras:
+            env_ids_t = torch.as_tensor(env_ids, dtype=torch.long, device=self.device)
+            progress = self._get_curriculum_progress_tensor(env_ids_t).squeeze(-1)
+            axis_scale = self._get_wave_axis_scale(progress)
+            self.extras["log"]["Curriculum/global_progress"] = float(self._get_curriculum_progress())
+            self.extras["log"]["Wave/mean_env_progress"] = float(torch.mean(progress).item())
+            self.extras["log"]["Wave/mean_amp_xyz"] = float(torch.mean(self._wave_amp[env_ids_t, :3]).item())
+            self.extras["log"]["Wave/mean_amp_rpy"] = float(torch.mean(self._wave_amp[env_ids_t, 3:]).item())
+            self.extras["log"]["Wave/axis_scale_x"] = float(torch.mean(axis_scale[:, 0]).item())
+            self.extras["log"]["Wave/axis_scale_yaw"] = float(torch.mean(axis_scale[:, 5]).item())
 
     def _sample_wave_params(self, env_ids: Sequence[int] | torch.Tensor):
         count = len(env_ids)
@@ -100,10 +112,11 @@ class StewartWaveSystemEnv(StewartTestEnv):
         pos_end = torch.tensor(self.cfg.wave_pos_amplitude, dtype=torch.float, device=self.device)
         rot_start = torch.tensor(self.cfg.wave_rot_amplitude_start, dtype=torch.float, device=self.device)
         rot_end = torch.tensor(self.cfg.wave_rot_amplitude, dtype=torch.float, device=self.device)
-        pos_amp = pos_start + (pos_end - pos_start) * progress.unsqueeze(-1)
-        rot_amp = rot_start + (rot_end - rot_start) * progress.unsqueeze(-1)
         axis_scale = self._get_wave_axis_scale(progress)
-        max_amp = torch.cat((pos_amp, rot_amp), dim=1) * axis_scale
+        # Keep non-zero start amplitudes active at low progress, while axis_scale gates only the incremental difficulty.
+        start_amp = torch.cat((pos_start, rot_start), dim=0).unsqueeze(0).expand(count, -1)
+        end_amp = torch.cat((pos_end, rot_end), dim=0).unsqueeze(0).expand(count, -1)
+        max_amp = start_amp + (end_amp - start_amp) * (progress.unsqueeze(-1) * axis_scale)
         freq_low = self._lerp_cfg_tensor(
             self.cfg.wave_frequency_range_start[0], self.cfg.wave_frequency_range[0], progress
         )
@@ -171,7 +184,8 @@ class StewartWaveSystemEnv(StewartTestEnv):
         obs = obs_dict["policy"]
         # Include the full commanded wave pose/velocity so the policy can learn feed-forward compensation.
         gravity_vec_w = self._gravity_vec_w
-        root_proj_g = quat_rotate_inverse(self._wave_root_quat_w, gravity_vec_w)
+        # Gravity projection should reflect the actual simulated base orientation.
+        root_proj_g = quat_rotate_inverse(self.robot.data.root_quat_w, gravity_vec_w)
         obs_dict["policy"] = torch.cat((obs, root_proj_g, self._wave_pose, self._wave_root_vel_w), dim=-1)
         return obs_dict
 
@@ -186,7 +200,7 @@ class StewartWaveSystemEnv(StewartTestEnv):
 
         # Residual "flatness": compute gravity projected into the platform frame relative to the root frame.
         # q_rel = q_root^{-1} * q_platform
-        q_rel = quat_mul(quat_conjugate(self._wave_root_quat_w), self.platform_quat)
+        q_rel = quat_mul(quat_conjugate(self.robot.data.root_quat_w), self.platform_quat)
         platform_proj_g_res = quat_rotate_inverse(q_rel, self._gravity_vec_w)
 
         disk_off_b = quat_rotate_inverse(

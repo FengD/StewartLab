@@ -144,15 +144,15 @@ class StewartTestEnvCfg(DirectRLEnvCfg):
 
     action_scale = 6000.0  # [N] direct slider force command
     # Slightly stronger low-pass to suppress high-frequency jitter.
-    action_smoothing = 0.20
+    action_smoothing = 0.12
     # Hard bandwidth limit: clamp per-step action change (after smoothing).
     # This directly prevents high-frequency small-amplitude oscillations that waste energy.
-    max_action_delta = 0.06
+    max_action_delta = 0.09
     # Optional height-adaptive bandwidth: allow larger changes when the object is still high (catching phase),
     # and tighten the limit near the target height (stabilization phase).
     adaptive_action_delta = True
-    max_action_delta_high = 0.14
-    max_action_delta_low = 0.04
+    max_action_delta_high = 0.18
+    max_action_delta_low = 0.06
     adaptive_action_delta_switch_height = 0.25  # [m] above target height
     finite_limit_margin = 0.005
     fallback_slider_limit = 0.08
@@ -188,8 +188,8 @@ class StewartTestEnvCfg(DirectRLEnvCfg):
 
     # - reward scales
     rew_scale_alive = 0.15
-    rew_scale_center = 12.0
-    rew_scale_center_velocity = 3.0
+    rew_scale_center = 16.0
+    rew_scale_center_velocity = 4.0
     rew_scale_height = 1.5
     rew_scale_lin_vel = 2.5
     rew_scale_ang_vel = 1.0

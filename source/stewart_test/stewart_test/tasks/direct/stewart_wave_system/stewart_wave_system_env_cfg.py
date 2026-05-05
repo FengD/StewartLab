@@ -58,17 +58,23 @@ class StewartWaveSystemEnvCfg(StewartTestEnvCfg):
 
     system_z_offset = 0.14
     wave_base_z_offset = -0.06
-    # Start wave training with milder disturbances; increase these again once the policy reliably catches
-    # and stabilizes the round ball, or replace them with a curriculum that ramps toward the old values.
+    # Wave task uses its own curriculum pacing: if we keep the fixed-base pacing/axis schedule,
+    # disturbances can stay effectively near-zero for too long, making wave learning look "stuck".
+    curriculum_duration_steps = 20000
+    curriculum_env_progress_spread = 0.25
+
+    # Start wave training with milder disturbances and ramp toward final values.
     wave_pos_amplitude = (0.04, 0.04, 0.02)
     wave_rot_amplitude = (0.06, 0.06, 0.09)
     wave_frequency_range = (0.25, 0.65)
-    wave_pos_amplitude_start = (0.0, 0.0, 0.0)
-    wave_rot_amplitude_start = (0.0, 0.0, 0.0)
+    # Keep a small non-zero start so early curriculum already contains visible wave disturbance.
+    wave_pos_amplitude_start = (0.008, 0.008, 0.004)
+    wave_rot_amplitude_start = (0.015, 0.015, 0.020)
     wave_frequency_range_start = (0.10, 0.25)
-    # Axis curriculum order: x, y, z, roll, pitch, yaw. Each axis ramps after its start progress.
-    wave_axis_start_progress = (0.15, 0.25, 0.35, 0.55, 0.70, 0.85)
-    wave_axis_ramp_progress = 0.15
+    # Axis curriculum order: x, y, z, roll, pitch, yaw.
+    # Earlier starts avoid a long "almost fixed-base" stage.
+    wave_axis_start_progress = (0.00, 0.08, 0.16, 0.30, 0.45, 0.60)
+    wave_axis_ramp_progress = 0.20
 
     object_spawn_radius = 0.04
     object_drop_height_range = (2.0, 3.0)
@@ -103,6 +109,8 @@ class StewartWaveSystemEnvCfg(StewartTestEnvCfg):
     rew_scale_platform_ang_vel = -0.22
     rew_scale_platform_lin_residual = -0.22
     rew_scale_disk_pose_reg = -0.42
+    rew_scale_center = 20.0
+    rew_scale_center_velocity = 5.0
 
     # After catch: reward keeping the ball centered on disk; penalize world-XY drift of top plate vs reset snapshot
     # (encourages compensating wave motion with sliders instead of letting the whole stack "surf" the disturbance).
