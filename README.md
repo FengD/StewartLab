@@ -13,17 +13,9 @@ The active training backend is RSL-RL PPO.
 
 ## Demonstrations
 
-### Ellipsoid Stabilization
-
-<video src="docs/media/stewart_ellipsoid_play.mp4" controls>
-  Ellipsoid stabilization play video.
-</video>
-
 ### Wave System Stabilization
 
-<video src="docs/media/stewart_wave_system_play.mp4" controls>
-  Wave system stabilization play video.
-</video>
+![docs](docs/media/stewart_wave_system_with_imu_play.gif)
 
 ## Assets
 
